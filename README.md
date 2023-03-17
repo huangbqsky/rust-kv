@@ -1,2 +1,2 @@
 # rust-kv
-A sample Rust KV
+A Simple Rust KV
