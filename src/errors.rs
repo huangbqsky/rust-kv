@@ -22,6 +22,15 @@ pub enum KVStoreError {
     /// Unknown command type error
     #[fail(display = "Unknown command type")]
     UnknownCommandType,
+
+    /// Unknown engine type error
+    #[fail(display = "Change engine after initialization")]
+    ChangeEngineError,
+
+    /// common string error
+    #[fail(display = "{}", _0)]
+    CommonStringError(String),
+
 }
 
 /// 为自定义错误实现 From trait，代表 io::Error -> KVStoreError
