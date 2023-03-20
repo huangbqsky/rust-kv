@@ -8,14 +8,15 @@ use std::path::PathBuf;
 use std::env;
 use kvs::{SledKvsEngine, Result};
 use crate::kvs::KvsEngine;
-# fn try_main() -> Result<()> {
+
+fn try_main() -> Result<()> {
     let mut store = SledKvsEngine::open(env::current_dir()?)?;
     store.set("1".to_owned(),"1".to_owned())?;
     assert_eq!(store.get("1".to_owned())?, Some("1".to_owned()));
     store.remove("1".to_owned())?;
     assert_eq!(store.get("1".to_owned())?, None);
-# Ok(())
-# }
+    Ok(())
+}
 */
 pub struct SledKvsEngine {
     inner: Db,
