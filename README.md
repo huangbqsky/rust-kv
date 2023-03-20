@@ -1,5 +1,5 @@
 # rust-simple-kv
-A Simple Rust KV
+A Simple KV Engine Written in Rust 🦀
 
 
 # 包结构
