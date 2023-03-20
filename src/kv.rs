@@ -1,6 +1,4 @@
-use crate::Command;
-use crate::KVStoreError::KeyNotFound;
-use crate::{KVStoreError, Result};
+use crate::{Command, KVStoreError, KvsEngine, Result};
 use serde_json::Deserializer;
 use std::collections::HashMap;
 use std::fs::{create_dir_all, read_dir, remove_file, File, OpenOptions};
@@ -10,18 +8,19 @@ use std::path::PathBuf;
 
 const MAX_USELESS_SIZE: u64 = 1024;
 
-/** A KvStore stores key/value pairs in HashMap.
+/** A KvStore stores key/value pairs using BitCask.
 # Example
 ```
 use std::env;
 use kvs::{KvStore, Result};
+use crate::kvs::KvsEngine;
 # fn try_main() -> Result<()> {
-    let mut store = KvStore::open(env::current_dir()?)?;
-    store.set("1".to_owned(),"1".to_owned())?;
-    assert_eq!(store.get("1".to_owned())?, Some("1".to_owned()));
-    store.remove("1".to_owned())?;
-    assert_eq!(store.get("1".to_owned())?, None);
-    Ok(())
+let mut store = KvStore::open(env::current_dir()?)?;
+store.set("1".to_owned(),"1".to_owned())?;
+assert_eq!(store.get("1".to_owned())?, Some("1".to_owned()));
+store.remove("1".to_owned())?;
+assert_eq!(store.get("1".to_owned())?, None);
+# Ok(())
 # }
 ```
  */
@@ -45,7 +44,7 @@ pub struct KvStore {
 }
 
 impl KvStore {
-    /// 打开 Open the KvStore at a given path. Return the KvStore.
+    /// Open the KvStore at a given path. Return the KvStore.
     pub fn open(path: impl Into<PathBuf>) -> Result<KvStore> {
         let dir_path = path.into();
         create_dir_all(&dir_path)?;
@@ -89,81 +88,6 @@ impl KvStore {
         Ok(store)
     }
 
-    /// 设置 Set the value of a string key to a string. Return an error if the value is not written successfully.
-    pub fn set(&mut self, key: String, value: String) -> Result<()> {
-        let command = Command::SET(key, value);
-        let data = serde_json::to_vec(&command)?;
-
-        let offset = self.current_writer.get_position();
-        self.current_writer.write_all(&data)?;
-        self.current_writer.flush()?;
-        let length = self.current_writer.get_position() - offset;
-        let file_number = self.current_file_number;
-
-        if let Command::SET(key, _) = command {
-            self.useless_size += self
-                .index
-                .insert(
-                    key,
-                    CommandPosition {
-                        offset,
-                        length,
-                        file_number,
-                    },
-                )
-                .map(|cp| cp.length)
-                .unwrap_or(0);
-        }
-
-        if self.useless_size > MAX_USELESS_SIZE {
-            self.compact()?;
-        }
-
-        Ok(())
-    }
-
-    /// 获取 Get the string value of a string key. If the key does not exist, return None. Return an error if the value is not read successfully.
-    pub fn get(&mut self, key: String) -> Result<Option<String>> {
-        if let Some(position) = self.index.get(&key) {
-            let source_reader = self
-                .current_readers
-                .get_mut(&position.file_number)
-                .expect("Can not find key in files but it is in memory");
-            source_reader.seek(SeekFrom::Start(position.offset))?;
-            let data_reader = source_reader.take(position.length as u64);
-
-            if let Command::SET(_, value) = serde_json::from_reader(data_reader)? {
-                Ok(Some(value))
-            } else {
-                Err(KVStoreError::UnknownCommandType)
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// 删除 Remove a given key. Return an error if the key does not exist or is not removed successfully.
-    pub fn remove(&mut self, key: String) -> Result<()> {
-        if self.index.get(&key).is_some() {
-            self.useless_size += self.index.remove(&key).map(|cp| cp.length).unwrap_or(0);
-
-            let command = serde_json::to_vec(&Command::RM(key))?;
-            let offset = self.current_writer.get_position();
-            self.current_writer.write_all(&command)?;
-            self.current_writer.flush()?;
-
-            self.useless_size += self.current_writer.get_position() - offset;
-
-            if self.useless_size > MAX_USELESS_SIZE {
-                self.compact()?;
-            }
-
-            Ok(())
-        } else {
-            Err(KeyNotFound)
-        }
-    }
-
     fn create_new_file(&mut self) -> Result<()> {
         self.current_file_number += 1;
         let new_file_path = self
@@ -183,7 +107,6 @@ impl KvStore {
         Ok(())
     }
 
-    // 重启
     fn recover(
         dir_path: &PathBuf,
         current_readers: &mut HashMap<u64, BufReader<File>>,
@@ -241,7 +164,6 @@ impl KvStore {
         Ok((*versions.last().unwrap_or(&0), useless_size))
     }
 
-    // 合并
     fn compact(&mut self) -> Result<()> {
         self.create_new_file()?;
 
@@ -276,13 +198,92 @@ impl KvStore {
             remove_file(self.dir_path.join(format!("data_{}.txt", number)))?;
         }
 
+        self.useless_size = 0;
+
         self.create_new_file()?;
 
         Ok(())
     }
 }
 
-/// 一个记录写入位置的结构体 a struct which records writer's current position
+impl KvsEngine for KvStore {
+    /// Set the value of a string key to a string. Return an error if the value is not written successfully.
+    fn set(&mut self, key: String, value: String) -> Result<()> {
+        let command = Command::SET(key, value);
+        let data = serde_json::to_vec(&command)?;
+
+        let offset = self.current_writer.get_position();
+        self.current_writer.write_all(&data)?;
+        self.current_writer.flush()?;
+        let length = self.current_writer.get_position() - offset;
+        let file_number = self.current_file_number;
+
+        if let Command::SET(key, _) = command {
+            self.useless_size += self
+                .index
+                .insert(
+                    key,
+                    CommandPosition {
+                        offset,
+                        length,
+                        file_number,
+                    },
+                )
+                .map(|cp| cp.length)
+                .unwrap_or(0);
+        }
+
+        if self.useless_size > MAX_USELESS_SIZE {
+            self.compact()?;
+        }
+
+        Ok(())
+    }
+
+    /// Get the string value of a string key. If the key does not exist, return None. Return an error if the value is not read successfully.
+    fn get(&mut self, key: String) -> Result<Option<String>> {
+        if let Some(position) = self.index.get(&key) {
+            let source_reader = self
+                .current_readers
+                .get_mut(&position.file_number)
+                .expect("Can not find key in files but it is in memory");
+            source_reader.seek(SeekFrom::Start(position.offset))?;
+            let data_reader = source_reader.take(position.length as u64);
+
+            if let Command::SET(_, value) = serde_json::from_reader(data_reader)? {
+                Ok(Some(value))
+            } else {
+                Err(KVStoreError::UnknownCommandType)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Remove a given key. Return an error if the key does not exist or is not removed successfully.
+    fn remove(&mut self, key: String) -> Result<()> {
+        if self.index.get(&key).is_some() {
+            self.useless_size += self.index.remove(&key).map(|cp| cp.length).unwrap_or(0);
+
+            let command = serde_json::to_vec(&Command::RM(key))?;
+            let offset = self.current_writer.get_position();
+            self.current_writer.write_all(&command)?;
+            self.current_writer.flush()?;
+
+            self.useless_size += self.current_writer.get_position() - offset;
+
+            if self.useless_size > MAX_USELESS_SIZE {
+                self.compact()?;
+            }
+
+            Ok(())
+        } else {
+            Err(KVStoreError::KeyNotFound)
+        }
+    }
+}
+
+/// a struct which records writer's current position
 struct BufWriterWithPosition<T: Write + Seek> {
     position: u64,
     writer: BufWriter<T>,
@@ -314,7 +315,7 @@ impl<T: Write + Seek> Write for BufWriterWithPosition<T> {
     }
 }
 
-/// 一个记录命令行信息的结构体 a struct which records command's metadata
+/// a struct which records command's metadata
 struct CommandPosition {
     offset: u64,
     length: u64,
