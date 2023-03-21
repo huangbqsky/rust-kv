@@ -36,10 +36,9 @@ fn try_main() -> Result<()> {
 }
 ```
 
+# 测试
+-> cargo test
+
 # 参考
 Talent-Plan：用 Rust 实现简易 KV 引擎 
 https://tanxinyu.work/naive-kvengine-in-rust/
-
-
-# 测试
--> cargo test
