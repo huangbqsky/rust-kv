@@ -14,18 +14,16 @@ const MAX_USELESS_SIZE: u64 = 1024;
 use std::env;
 use kvs::{KvStore, Result};
 use crate::kvs::KvsEngine;
-# fn try_main() -> Result<()> {
-let mut store = KvStore::open(env::current_dir()?)?;
-store.set("1".to_owned(),"1".to_owned())?;
-assert_eq!(store.get("1".to_owned())?, Some("1".to_owned()));
-store.remove("1".to_owned())?;
-assert_eq!(store.get("1".to_owned())?, None);
-# Ok(())
-# }
-```
- */
 
-/**
+fn try_main() -> Result<()> {
+    let mut store = KvStore::open(env::current_dir()?)?;
+    store.set("1".to_owned(),"1".to_owned())?;
+    assert_eq!(store.get("1".to_owned())?, Some("1".to_owned()));
+    store.remove("1".to_owned())?;
+    assert_eq!(store.get("1".to_owned())?, None);
+    Ok(())
+}
+```
 KvStore 结构体中各个变量含义如下：
 Index ：参照 bitcask 的模型，key 为 kv pair 的 key，value 并不存储对应的 value，而是存储该 value 在第 file_number 个文件的 offset 处，长度为 length。
 current_readers：对于所有已经存在的文件，KvStore 都缓存了一个 BufReader 来便于 seek 到对应的 offset 去 read。实际上也可以没有该结构体每次需要 reader 时新建即可，但复用 reader 可以一定程度上减少资源的损耗。

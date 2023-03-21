@@ -23,3 +23,9 @@ assert_cmd = "2.0.4"
 predicates = "2.1.1"
 tempfile = "3.3.0"
 walkdir = "2.3.2"
+criterion = { version = "0.3.6", features = ["html_reports"] }
+rand = "0.8.5"
+
+[[bench]]
+name = "benches"
+harness = false

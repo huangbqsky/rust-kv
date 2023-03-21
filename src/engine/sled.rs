@@ -17,6 +17,7 @@ fn try_main() -> Result<()> {
     assert_eq!(store.get("1".to_owned())?, None);
     Ok(())
 }
+```
 */
 pub struct SledKvsEngine {
     inner: Db,
