@@ -2,13 +2,39 @@
 A Simple KV Engine Written in Rust 🦀
 
 
-# 包结构
-对于包含一个 lib 包和一个 bin 包的 crate ，在 lib 包中，需要引用所有新增文件的文件名当做其模块名将其引入，此外还需要使用 pub use 语法来将 bin 包会用到的结构公开导出。
 
-在 lib 包的任何文件里，都可以通过 crate:: 的方式来引入本 lib 库被公开导出的结构。
+# Example
 
-在 bin 包中，需要通过实际 crate 名:: 的方式来引入同名 lib 库被公开导出的结构。
+KvStore实现：
+```
+use std::env;
+use kvs::{KvStore, Result};
+use crate::kvs::KvsEngine;
 
+fn try_main() -> Result<()> {
+    let mut store = KvStore::open(env::current_dir()?)?;
+    store.set("1".to_owned(),"1".to_owned())?;
+    assert_eq!(store.get("1".to_owned())?, Some("1".to_owned()));
+    store.remove("1".to_owned())?;
+    assert_eq!(store.get("1".to_owned())?, None);
+    Ok(())
+}
+```
+SledKvsEngine实现：（Sled 是一款基于 Bw 树构建的嵌入式 KV 数据库）
+```
+use std::env;
+use kvs::{SledKvsEngine, Result};
+use crate::kvs::KvsEngine;
+
+fn try_main() -> Result<()> {
+    let mut store = SledKvsEngine::open(env::current_dir()?)?;
+    store.set("1".to_owned(),"1".to_owned())?;
+    assert_eq!(store.get("1".to_owned())?, Some("1".to_owned()));
+    store.remove("1".to_owned())?;
+    assert_eq!(store.get("1".to_owned())?, None);
+    Ok(())
+}
+```
 
 # 参考
 Talent-Plan：用 Rust 实现简易 KV 引擎 
