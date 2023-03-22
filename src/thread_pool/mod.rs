@@ -1,12 +1,16 @@
+/*!
+  Contains many threadPool implementation
+*/
+
 use crate::Result;
 
 mod naive_thread_pool;
-mod shared_queue_thread_pool;
 mod rayon_thread_pool;
+mod shared_queue_thread_pool;
 
 pub use naive_thread_pool::NaiveThreadPool;
-pub use shared_queue_thread_pool::SharedQueueThreadPool;
 pub use rayon_thread_pool::RayonThreadPool;
+pub use shared_queue_thread_pool::SharedQueueThreadPool;
 
 /**
  * 为了多线程需要抽象出线程池的概念，
