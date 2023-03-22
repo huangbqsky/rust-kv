@@ -7,6 +7,8 @@ mod errors;
 mod proto;
 mod server;
 
+mod thread_pool;
+
 pub use engine::Command;
 pub use engine::{KvStore, KvsEngine, SledKvsEngine};
 pub use errors::{KVStoreError, Result};
